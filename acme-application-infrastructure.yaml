@@ -1,0 +1,119 @@
+heat_template_version: 2015-04-30
+
+description: Sample template to deploy VNF stack with affinity/anti-affinity policies
+
+resources:
+#Network Infrastructure
+    web_net:
+      type: OS::Neutron::Net
+
+    web_subnet:
+      type: OS::Neutron::Subnet
+      properties:
+        network_id: { get_resource: web_net }
+        cidr: "30.0.0.0/24"
+        dns_nameservers: [ "10.20.20.1", "10.20.20.2" ]
+        ip_version: 4
+
+    app_net:
+      type: OS::Neutron::Net
+
+    app_subnet:
+      type: OS::Neutron::Subnet
+      properties:
+        network_id: { get_resource: app_net }
+        cidr: "40.0.0.0/24"
+        dns_nameservers: [ "10.20.20.1", "10.20.20.2" ]
+        ip_version: 4
+
+    db_net:
+      type: OS::Neutron::Net
+
+    db_subnet:
+      type: OS::Neutron::Subnet
+      properties:
+        network_id: { get_resource: db_net }
+        cidr: "50.0.0.0/24"
+        dns_nameservers: [ "10.20.20.1", "10.20.20.2" ]
+        ip_version: 4
+
+    acme_router:
+      type: OS::Neutron::Router
+      properties:
+        external_gateway_info: { network: EXTNET }
+    acme_router_web:
+      type: OS::Neutron::RouterInterface
+      properties:
+        router_id: { get_resource: acme_router }
+        subnet: { get_resource: web_subnet }
+    acme_router_app:
+      type: OS::Neutron::RouterInterface
+      properties:
+        router_id: { get_resource: acme_router }
+        subnet: { get_resource: app_subnet }
+    acme_router_db:
+      type: OS::Neutron::RouterInterface
+      properties:
+        router_id: { get_resource: acme_router }
+        subnet: { get_resource: db_subnet }
+
+#Compute Infrastructure
+    web-server-farm:
+      type: OS::Nova::ServerGroup
+      properties:
+        name: "web-server-farm"
+        policies: [anti-affinity]
+
+    app-server-farm:
+      type: OS::Nova::ServerGroup
+      properties:
+        name: "app-server-farm"
+        policies: [anti-affinity]
+
+    db-server-farm:
+      type: OS::Nova::ServerGroup
+      properties:
+        name: "db-server-farm"
+        policies: [anti-affinity]
+
+    web-01:
+      type: OS::Nova::Server
+      properties:
+        image: ubuntu-14.04-server-amd64
+        flavor: m1.medium
+        scheduler_hints: { group: { get_resource: web-server-farm } }
+    web-02:
+      type: OS::Nova::Server
+      properties:
+        image: ubuntu-14.04-server-amd64
+        flavor: m1.medium
+        scheduler_hints: { group: { get_resource: web-server-farm } }
+
+    app-01:
+      type: OS::Nova::Server
+      properties:
+        image: ubuntu-14.04-server-amd64
+        flavor: m1.medium
+        scheduler_hints: { group: { get_resource: app-server-farm } }
+    app-02:
+      type: OS::Nova::Server
+      properties:
+        image: ubuntu-14.04-server-amd64
+        flavor: m1.medium
+        scheduler_hints: { group: { get_resource: app-server-farm } }
+
+    db-01:
+      type: OS::Nova::Server
+      properties:
+        image: ubuntu-14.04-server-amd64
+        flavor: m1.medium
+        scheduler_hints: { group: { get_resource: db-server-farm } }
+    db-02:
+      type: OS::Nova::Server
+      properties:
+        image: ubuntu-14.04-server-amd64
+        flavor: m1.medium
+        scheduler_hints: { group: { get_resource: db-server-farm } }
+
+#Network Services
+#Create Load balancer here
