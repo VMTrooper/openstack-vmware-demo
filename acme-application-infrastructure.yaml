@@ -2,6 +2,13 @@ heat_template_version: 2015-04-30
 
 description: Sample template to deploy VNF stack with affinity/anti-affinity policies
 
+parameters:
+  external_network_id:
+    type: string
+    label: EXTNET
+    description: Provider network UUID
+    default: 77d01cc3-1e96-4d6b-a9d7-49738164c821
+
 resources:
 #Network Infrastructure
     web_net:
@@ -37,10 +44,13 @@ resources:
         dns_nameservers: [ "10.20.20.1", "10.20.20.2" ]
         ip_version: 4
 
+#Create Router
     acme_router:
       type: OS::Neutron::Router
       properties:
         external_gateway_info: { network: EXTNET }
+        value_specs:
+          {"router_type":"exclusive"}
     acme_router_web:
       type: OS::Neutron::RouterInterface
       properties:
@@ -58,6 +68,7 @@ resources:
         subnet: { get_resource: db_subnet }
 
 #Compute Infrastructure
+  #Anti-affinity Server Groups
     web-server-farm:
       type: OS::Nova::ServerGroup
       properties:
@@ -76,6 +87,7 @@ resources:
         name: "db-server-farm"
         policies: [anti-affinity]
 
+  #Create Instances
     web-01:
       type: OS::Nova::Server
       properties:
@@ -129,3 +141,36 @@ resources:
 
 #Network Services
 #Create Load balancer here
+    monitor:
+      type: OS::Neutron::HealthMonitor
+      properties:
+        type: TCP
+        delay: 10
+        max_retries: 5
+        timeout: 10
+
+    pool:
+      type: OS::Neutron::Pool
+      depends_on:
+        - web_subnet
+      properties:
+        protocol: HTTP
+        monitors:
+          - { get_resource: monitor }
+        subnet: { get_resource: web_subnet}
+        lb_method: ROUND_ROBIN
+        vip:
+          protocol_port: 80
+
+    lb:
+      type: OS::Neutron::LoadBalancer
+      properties:
+        members: [ { get_resource: web-01 }, { get_resource: web-02 } ]
+        protocol_port: 80
+        pool_id: { get_resource: pool }
+
+    lb_floating:
+      type: OS::Neutron::FloatingIP
+      properties:
+        floating_network_id: { get_param: external_network_id }
+        port_id: { get_attr: [ pool, vip, port_id ] }
