@@ -1,0 +1,14 @@
+heat_template_version: 2015-04-30
+
+description: Sample template to deploy VNF stack with affinity/anti-affinity policies
+
+resources:
+  gold-instance:
+    type: OS::Glance::Image
+    properties:
+      location: http://10.162.210.6/gjayavelu/ovf/xen62-clearwater-auto/xen62-clearwater-auto-disk1.vmdk 
+      name: stack-image
+      container_format: bare
+      disk_format: vmdk
+    metadata:
+      vmware_vm_group: coke
