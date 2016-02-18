@@ -81,12 +81,16 @@ resources:
       properties:
         image: ubuntu-14.04-server-amd64
         flavor: m1.medium
+        networks:
+          - network: { get_resource: web_net }
         scheduler_hints: { group: { get_resource: web-server-farm } }
     web-02:
       type: OS::Nova::Server
       properties:
         image: ubuntu-14.04-server-amd64
         flavor: m1.medium
+        networks:
+          - network: { get_resource: web_net }
         scheduler_hints: { group: { get_resource: web-server-farm } }
 
     app-01:
@@ -94,12 +98,16 @@ resources:
       properties:
         image: ubuntu-14.04-server-amd64
         flavor: m1.medium
+        networks:
+          - network: { get_resource: app_net }
         scheduler_hints: { group: { get_resource: app-server-farm } }
     app-02:
       type: OS::Nova::Server
       properties:
         image: ubuntu-14.04-server-amd64
         flavor: m1.medium
+        networks:
+          - network: { get_resource: app_net }
         scheduler_hints: { group: { get_resource: app-server-farm } }
 
     db-01:
@@ -107,12 +115,16 @@ resources:
       properties:
         image: ubuntu-14.04-server-amd64
         flavor: m1.medium
+        networks:
+          - network: { get_resource: db_net }
         scheduler_hints: { group: { get_resource: db-server-farm } }
     db-02:
       type: OS::Nova::Server
       properties:
         image: ubuntu-14.04-server-amd64
         flavor: m1.medium
+        networks:
+          - network: { get_resource: db_net }
         scheduler_hints: { group: { get_resource: db-server-farm } }
 
 #Network Services
