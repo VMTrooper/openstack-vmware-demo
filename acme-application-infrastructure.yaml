@@ -1,11 +1,19 @@
 heat_template_version: 2015-04-30
 
-description: Sample template to deploy VNF stack with affinity/anti-affinity policies
+description: >
+  This HOT contains the infrastructure definition for Acme application. The following components are configured:
+    * Neutron LBaaS (NSX Load Balancer)
+    * Neutron Router (NSX Edge)
+    * Neutron Networks (NSX Logical Switches)
+    * Neutron Security Groups (NSX SG)
+    * Nova Servers (VMware vSphere Virtual Machines)
+    * Nova Server Groups (DRS Anti-affinity Policies)
+    * Nova Flavors (VMware vSphere Reservations and SPBM)
 
 parameters:
   external_network_id:
     type: string
-    label: EXTNET
+    label: Provider Network UUID
     description: Provider network UUID
     default: 77d01cc3-1e96-4d6b-a9d7-49738164c821
 
@@ -43,6 +51,86 @@ resources:
         cidr: "50.0.0.0/24"
         dns_nameservers: [ "10.20.20.1", "10.20.20.2" ]
         ip_version: 4
+
+    # Create security groups for the tiers.
+    db_security_group:
+      type: OS::Neutron::SecurityGroup
+      properties:
+        description: Allow sql traffic from web tier
+        name: db-security-group
+        rules:
+          - remote_ip_prefix: { get_attr: [ app_subnet, cidr ] }
+            protocol: tcp
+            port_range_min: 3306
+            port_range_max: 3306
+
+    web_security_group:
+      type: OS::Neutron::SecurityGroup
+      properties:
+        description: Allow web traffic from anywhere
+        name: web-security-group
+        rules:
+          - remote_ip_prefix: 0.0.0.0/0
+            protocol: tcp
+            port_range_min: 80
+            port_range_max: 80
+          - remote_ip_prefix: 0.0.0.0/0
+            protocol: tcp
+            port_range_min: 22
+            port_range_max: 22
+
+    app_security_group:
+      type: OS::Neutron::SecurityGroup
+      properties:
+        description: Allow app traffic from web tier
+        name: app-security-group
+        rules:
+          - remote_ip_prefix: { get_attr: [ web_subnet, cidr ] }
+            protocol: tcp
+            port_range_min: 8443
+            port_range_max: 8443
+
+    # Create port(s) on app switch.
+    web-01_port0:
+      type: OS::Neutron::Port
+      properties:
+        network_id: { get_resource: web_net }
+        security_groups:
+          - { get_resource: web_security_group }
+    web-02_port0:
+      type: OS::Neutron::Port
+      properties:
+        network_id: { get_resource: web_net }
+        security_groups:
+          - { get_resource: web_security_group }
+
+    # Create port(s) on app switch.
+    app-01_port0:
+      type: OS::Neutron::Port
+      properties:
+        network_id: { get_resource: app_net }
+        security_groups:
+          - { get_resource: app_security_group }
+    app-02_port0:
+      type: OS::Neutron::Port
+      properties:
+        network_id: { get_resource: app_net }
+        security_groups:
+          - { get_resource: app_security_group }
+
+    # Create port(s) on db switch.
+    db-01_port0:
+      type: OS::Neutron::Port
+      properties:
+        network_id: { get_resource: db_net }
+        security_groups:
+          - { get_resource: db_security_group }
+    db-02_port0:
+      type: OS::Neutron::Port
+      properties:
+        network_id: { get_resource: db_net }
+        security_groups:
+          - { get_resource: db_security_group }
 
 #Create Router
     acme_router:
@@ -86,57 +174,80 @@ resources:
       properties:
         name: "db-server-farm"
         policies: [anti-affinity]
+  
+  # #Performance Flavors - Liberty Feature
+  #   web-performance:
+  #     type: OS::Nova::Flavor
+  #     properties:
+  #       ram: 2048
+  #       vcpus: 1
+  #       disk: 20
+  #       extra_specs: { "quota:vif_reservation": "300" }
+  #   app-performance:
+  #     type: OS::Nova::Flavor
+  #     properties:
+  #       ram: 2048
+  #       vcpus: 1
+  #       disk: 20
+  #       extra_specs: { "quota:cpu_reservation": "1024" }
 
   #Create Instances
     web-01:
       type: OS::Nova::Server
       properties:
+        name: web-server-01
         image: ubuntu-14.04-server-amd64
-        flavor: m1.medium
+        flavor: web-performance
+        # flavor: { get_resource: web-performance }
         networks:
-          - network: { get_resource: web_net }
+          - port: { get_resource: web-01_port0 }
         scheduler_hints: { group: { get_resource: web-server-farm } }
     web-02:
       type: OS::Nova::Server
       properties:
+        name: web-server-02
         image: ubuntu-14.04-server-amd64
-        flavor: m1.medium
+        flavor: web-performance
         networks:
-          - network: { get_resource: web_net }
+          - port: { get_resource: web-02_port0 }
         scheduler_hints: { group: { get_resource: web-server-farm } }
 
     app-01:
       type: OS::Nova::Server
       properties:
+        name: app-server-01
         image: ubuntu-14.04-server-amd64
-        flavor: m1.medium
+        flavor: app-performance
         networks:
-          - network: { get_resource: app_net }
+          - port: { get_resource: app-01_port0 }
         scheduler_hints: { group: { get_resource: app-server-farm } }
     app-02:
       type: OS::Nova::Server
       properties:
+        name: app-server-02
         image: ubuntu-14.04-server-amd64
-        flavor: m1.medium
+        flavor: app-performance
         networks:
-          - network: { get_resource: app_net }
+          - port: { get_resource: app-02_port0 }
         scheduler_hints: { group: { get_resource: app-server-farm } }
 
     db-01:
       type: OS::Nova::Server
       properties:
+        name: db-server-01
         image: ubuntu-14.04-server-amd64
         flavor: m1.medium
         networks:
-          - network: { get_resource: db_net }
+          - port: { get_resource: db-01_port0 }
         scheduler_hints: { group: { get_resource: db-server-farm } }
     db-02:
       type: OS::Nova::Server
       properties:
+        name: db-server-02
         image: ubuntu-14.04-server-amd64
         flavor: m1.medium
         networks:
-          - network: { get_resource: db_net }
+          - port: { get_resource: db-02_port0 }
         scheduler_hints: { group: { get_resource: db-server-farm } }
 
 #Network Services
