@@ -138,7 +138,7 @@ resources:
       properties:
         external_gateway_info: { network: EXTNET }
         value_specs:
-          {"router_type":"exclusive"}
+          { "router_type": "exclusive" }
     acme_router_web:
       type: OS::Neutron::RouterInterface
       properties:
@@ -175,7 +175,7 @@ resources:
         name: "db-server-farm"
         policies: [anti-affinity]
   
-  # #Performance Flavors - Liberty Feature
+  # #Performance Flavors - The Nova::Flavor resource is a Liberty Feature
   #   web-performance:
   #     type: OS::Nova::Flavor
   #     properties:
@@ -192,6 +192,15 @@ resources:
   #       extra_specs: { "quota:cpu_reservation": "1024" }
 
   #Create Instances
+    jumpbox:
+      type: OS::Nova::Server
+      properties:
+        name: jumpbox
+        image: windows-2012-r2-ova
+        flavor: m1.medium
+        networks:
+          - network: { get_resource: web_net }
+
     web-01:
       type: OS::Nova::Server
       properties:
@@ -202,6 +211,13 @@ resources:
         networks:
           - port: { get_resource: web-01_port0 }
         scheduler_hints: { group: { get_resource: web-server-farm } }
+        user_data_format: RAW
+        user_data: |
+          #!/bin/bash -ex
+          touch /home/ubuntu/index.html
+          export local_ip=$(ifconfig eth0|grep 'inet addr'|awk -F: '{print $2}'| awk '{print $1}')
+          echo "You are connected to <b>$HOSTNAME</b> at <b>$local_ip</b>" >> /home/ubuntu/index.html
+          cd /home/ubuntu; sudo python -m SimpleHTTPServer 80 &
     web-02:
       type: OS::Nova::Server
       properties:
@@ -211,6 +227,13 @@ resources:
         networks:
           - port: { get_resource: web-02_port0 }
         scheduler_hints: { group: { get_resource: web-server-farm } }
+        user_data_format: RAW
+        user_data: |
+          #!/bin/bash -ex
+          touch /home/ubuntu/index.html
+          export local_ip=$(ifconfig eth0|grep 'inet addr'|awk -F: '{print $2}'| awk '{print $1}')
+          echo "You are connected to <b>$HOSTNAME</b> at <b>$local_ip</b>" >> /home/ubuntu/index.html
+          cd /home/ubuntu; sudo python -m SimpleHTTPServer 80 &
 
     app-01:
       type: OS::Nova::Server
@@ -236,7 +259,7 @@ resources:
       properties:
         name: db-server-01
         image: ubuntu-14.04-server-amd64
-        flavor: m1.medium
+        flavor: db-performance
         networks:
           - port: { get_resource: db-01_port0 }
         scheduler_hints: { group: { get_resource: db-server-farm } }
@@ -245,7 +268,7 @@ resources:
       properties:
         name: db-server-02
         image: ubuntu-14.04-server-amd64
-        flavor: m1.medium
+        flavor: db-performance
         networks:
           - port: { get_resource: db-02_port0 }
         scheduler_hints: { group: { get_resource: db-server-farm } }
