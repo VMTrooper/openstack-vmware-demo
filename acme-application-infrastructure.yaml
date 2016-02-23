@@ -270,8 +270,7 @@ resources:
     pool:
       type: OS::Neutron::Pool
       depends_on:
-        - acme_router
-        - web_subnet
+        - acme_router_web
       properties:
         protocol: HTTP
         monitors:
